@@ -3,6 +3,15 @@ import asyncio
 from game import Game
 from exceptions import TooManyPlayersError
 
+MESSAGE_CODES = {
+    -1: 'success',
+    -2: 'player_not_found',
+    -3: 'not_your_turn',
+    -4: 'box_num_error',
+    -5: 'no_more_turns',
+    -6: 'not_available_now',
+    -7: 'game_not_started'
+}
 
 class ServerApp:
     def __init__(self, host: str = 'localhost', port: int = 8889):
@@ -31,18 +40,49 @@ class ServerApp:
                 if self.close_connection(connection):
                     break
 
+    async def send_message_open(self, connection, box_num, score):
+        for client in self.connected:
+            if client != connection:
+                await client.send(f'other open {box_num}')
+            else:
+                await client.send(f'opened {box_num} {score}')
+
+    async def send_message_skip(self, connection):
+        for client in self.connected:
+            if client != connection:
+                await client.send('other skip')
+            else:
+                await client.send('skipped')
+
+    async def send_message_withdraw(self, connection, score):
+        for client in self.connected:
+            if client != connection:
+                await client.send(f'other withdraw')
+            else:
+                await client.send(f'withdraw {score}')
+
     async def message_handler(self, message, connection):
         if message.startswith('open '):
             box_num = message.split()[1]
-            score = self.game.open_box(box_num)
-            if score is not None:
-                for client in self.connected:
-                    if client != connection:
-                        await client.send(f'other {box_num}')
-                    else:
-                        await client.send(f'success {box_num} {score}')
+            code, score = self.game.player_turn_open(connection, box_num)
+            if code == -1:
+                await self.send_message_open(connection, box_num, score)
             else:
-                await connection.send('error')
+                await connection.send(MESSAGE_CODES[code])
+        elif message == 'skip':
+            code, score = self.game.player_turn_skip(connection)
+            if code == -1:
+                await self.send_message_skip(connection)
+            elif code == 0:
+                await self.send_message_withdraw(connection, score)
+            else:
+                await connection.send(MESSAGE_CODES[code])
+        elif message == 'withdraw':
+            code, score = self.game.player_turn_withdraw(connection)
+            if code == -1:
+                await self.send_message_withdraw(connection, score)
+            else:
+                await connection.send(MESSAGE_CODES[code])
         elif message == "I'm feeling high,rat!":
             await connection.send(f'player {self.game.get_player(connection).num}')
         else:
