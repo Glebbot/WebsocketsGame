@@ -61,6 +61,23 @@ class ServerApp:
             else:
                 await client.send(f'withdraw {score}')
 
+    async def check_game_end(self):
+        code, score = self.game.win_condition()
+        if code == 0:
+            for client in self.connected:
+                await client.send(f'draw {score}')
+            print('Game ended with draw')
+            self.game = Game()
+        elif code == 1 or code == 2:
+            for client in self.connected:
+                if self.game.get_player(client).num == code:
+                    await client.send(f'win {score}')
+                else:
+                    await client.send(f'lose {score}')
+            self.game = Game()
+            print(f'Game ended with player {code} win')
+
+
     async def message_handler(self, message, connection):
         if message.startswith('open '):
             box_num = message.split()[1]
@@ -77,16 +94,18 @@ class ServerApp:
                 await self.send_message_withdraw(connection, score)
             else:
                 await connection.send(MESSAGE_CODES[code])
+            await self.check_game_end()
         elif message == 'withdraw':
             code, score = self.game.player_turn_withdraw(connection)
             if code == -1:
                 await self.send_message_withdraw(connection, score)
             else:
                 await connection.send(MESSAGE_CODES[code])
+            await self.check_game_end()
         elif message == "I'm feeling high,rat!":
             await connection.send(f'player {self.game.get_player(connection).num}')
         else:
-            await connection.send('Unknown command')
+            await connection.send('unknown')
 
     def close_connection(self, connection):
         try:

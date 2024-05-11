@@ -136,4 +136,13 @@ class Game:
         self.withdraw(player)
         return -1, player.score
 
+    def win_condition(self):
+        if self.first_player.turns <= 0 and self.second_player.turns <= 0:
+            if self.first_player.score > self.second_player.score:
+                return 1, self.first_player.score
+            elif self.first_player.score < self.second_player.score:
+                return 2, self.second_player.score
+            return 0, self.first_player.score
+        return -1, 0
+
 
